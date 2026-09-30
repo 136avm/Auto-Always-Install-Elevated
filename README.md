@@ -85,7 +85,7 @@ All dependencies are pre-installed on **Kali Linux** and **Parrot OS** out of th
 
 ```bash
 git clone https://github.com/136avm/Auto-Always-Install-Elevated
-cd aie
+cd Auto-Always-Install-Elevated
 chmod +x aie.sh
 ```
 
